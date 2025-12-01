@@ -3,21 +3,22 @@
 
 import PackageDescription
 
-let package = Package(
-    name: "VLNetworkKit",
-    products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
-        .library(
-            name: "VLNetworkKit",
-            targets: ["VLNetworkKit"]
-        ),
-    ],
-    targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
-        .target(
-            name: "VLNetworkKit"
-        ),
-
-    ]
-)
+let package = Package(name: "VLNetworkKit",
+                      defaultLocalization: "en",
+                      platforms: [ .iOS(.v17) ],
+                      products:
+                      [
+                       .library(name: "VLNetworkKit",
+                                targets: [ "VLNetworkKit" ])
+                      ],
+                      dependencies:
+                      [
+                       .package(url: "https://github.com/VLstack/VLstackNamespace", from: "1.2.0"),
+                       .package(url: "https://github.com/VLstack/VLBundleKit", from: "1.5.1")
+                      ],
+                      targets:
+                      [
+                       .target(name: "VLNetworkKit",
+                               dependencies: [ "VLstackNamespace", "VLBundleKit" ],
+                               resources: [ .process("Resources") ])
+                      ])
