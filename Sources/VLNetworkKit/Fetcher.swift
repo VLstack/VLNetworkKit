@@ -14,7 +14,8 @@ extension VLstack
 
   // MARK: - Publics
   public func fetch(url: URL,
-                    options: [ FetchOption ]? = nil) async throws -> FetchResult
+                    options: [ FetchOption ]? = nil,
+                    decodeAsString: Bool = false) async throws -> FetchResult
   {
    let config = parseOptions(options)
    let request = buildRequest(url: url, config: config)
@@ -40,7 +41,16 @@ extension VLstack
     guard size <= maxSize else { throw FetchError.exceedMaxSize }
    }
 
-   guard let content = String(data: data, encoding: config.encoding) else { throw FetchError.decodingError }
+   let content: String
+   if decodeAsString
+   {
+    guard let decoded = String(data: data, encoding: config.encoding) else { throw FetchError.decodingError }
+    content = decoded
+   }
+   else
+   {
+    content = ""
+   }
 
    var headers: [String: String] = [:]
    for (k, v) in httpResponse.allHeaderFields
@@ -64,7 +74,17 @@ extension VLstack
   public func fetchContent(url: URL,
                            options: [ FetchOption ]? = nil) async throws -> String
   {
-   try await fetch(url: url, options: options).content
+   try await fetch(url: url,
+                   options: options,
+                   decodeAsString: true).content
+  }
+
+  public func fetchData(url: URL,
+                        options: [ FetchOption ]? = nil) async throws -> Data
+  {
+   try await fetch(url: url,
+                   options: options,
+                   decodeAsString: false).data
   }
 
   // MARK: - Privates
