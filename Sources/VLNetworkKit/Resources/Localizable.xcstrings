@@ -165,6 +165,88 @@
         }
       }
     },
+    "I18N-VLNetworkKit.InvalidURL(%@)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die angegebene URL ist ungültig: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The provided URL is invalid: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La URL proporcionada no es válida: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'URL fournie est invalide : %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'URL fornito non è valido: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "指定されたURLは無効です: %@"
+          }
+        }
+      }
+    },
+    "I18N-VLNetworkKit.javascriptEvaluationFailed(%@)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "JavaScript-Ausführung fehlgeschlagen: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "JavaScript execution failed: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fallo en la ejecución de JavaScript: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Échec de l’exécution du script : %@"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esecuzione JavaScript fallita: %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "JavaScriptの実行に失敗しました: %@"
+          }
+        }
+      }
+    },
     "I18N-VLNetworkKit.ServerAnswerIsInvalid" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -243,6 +325,47 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "リクエストがタイムアウトしました"
+          }
+        }
+      }
+    },
+    "I18N-VLNetworkKit.unexpectedResultType(%@, %@)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unerwarteter Ergebnistyp (erwartet: %1$@, erhalten: %2$@)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unexpected result type (expected: %1$@, received: %2$@)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tipo de resultado inesperado (esperado: %1$@, recibido: %2$@)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type de résultat inattendu (attendu : %1$@, reçu : %2$@)"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tipo di risultato inaspettato (atteso: %1$@, ricevuto: %2$@)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "予期しない結果タイプ（期待値: %1$@、実際の値: %2$@）"
           }
         }
       }
