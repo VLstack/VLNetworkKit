@@ -175,22 +175,6 @@ extension VLstack
          .trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
-  @inlinable
-  internal func toURLsAbsoluteString(urls: Set<String>,
-                                     baseURL expectedBase: URL?) -> Set<String>
-  {
-   let absolutes = urls.compactMap
-   {
-    string -> String? in
-    // On essaie d'abord de créer une URL absolue
-    if let url = URL(string: string), url.scheme != nil { return url.absoluteString }
-    // Sinon, on la résout par rapport à la base URL en paramètre ou founie au constructeur
-    return URL(string: string, relativeTo: expectedBase ?? self.baseURL)?.absoluteString
-   }
-
-   return Set(absolutes)
-  }
-
   // MARK: - Wait for DOM ready
   private func startWaitForDOMReady() async
   {
@@ -291,19 +275,20 @@ extension VLstack
    return URL(string: string)
   }
 
-  public func getImagesURL(baseURL: URL? = nil) async throws -> Set<URL>
-  {
-   let urls = try await getImagesURLAbsoluteString(baseURL: baseURL)
-
-   return Set(urls.compactMap(URL.init))
-  }
-
-  public func getImagesURLAbsoluteString(baseURL: URL? = nil) async throws -> Set<String>
+  public func getImagesURL(baseURL expectedBase: URL? = nil) async throws -> Set<URL>
   {
    let urls: Set<String> = try await getImagesURLString()
 
-   return toURLsAbsoluteString(urls: urls,
-                               baseURL: baseURL)
+   return VLstack.NetworkHelper.toAbsoluteURLs(urls: urls,
+                                               baseURL: expectedBase ?? self.baseURL)
+  }
+
+  public func getImagesURLAbsoluteString(baseURL expectedBase: URL? = nil) async throws -> Set<String>
+  {
+   let urls: Set<String> = try await getImagesURLString()
+
+   return VLstack.NetworkHelper.toAbsoluteURLStrings(urls: urls,
+                                                     baseURL: expectedBase ?? self.baseURL)
   }
 
   public func getImagesURLString() async throws -> Set<String>
@@ -339,18 +324,20 @@ extension VLstack
    return lang.isEmpty ? nil : lang
   }
 
-  public func getLinksURL(baseURL: URL? = nil) async throws -> Set<URL>
-  {
-   let urls = try await getLinksURLAbsoluteString(baseURL: baseURL)
-
-   return Set(urls.compactMap(URL.init))
-  }
-
-  public func getLinksURLAbsoluteString(baseURL: URL? = nil) async throws -> Set<String>
+  public func getLinksURL(baseURL expectedBase: URL? = nil) async throws -> Set<URL>
   {
    let urls: Set<String> = try await getLinksURLString()
 
-   return toURLsAbsoluteString(urls: urls, baseURL: baseURL)
+   return VLstack.NetworkHelper.toAbsoluteURLs(urls: urls,
+                                               baseURL: expectedBase ?? self.baseURL)
+  }
+
+  public func getLinksURLAbsoluteString(baseURL expectedBase: URL? = nil) async throws -> Set<String>
+  {
+   let urls: Set<String> = try await getLinksURLString()
+
+   return VLstack.NetworkHelper.toAbsoluteURLStrings(urls: urls,
+                                                     baseURL: expectedBase ?? self.baseURL)
   }
 
   public func getLinksURLString() async throws -> Set<String>
