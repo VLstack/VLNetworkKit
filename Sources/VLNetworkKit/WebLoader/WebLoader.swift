@@ -8,40 +8,32 @@ extension VLstack
  @MainActor
  public final class WebLoader: NSObject
  {
-  public struct Metadata
-  {
-   let title: String?
-   let description: String?
-   let ogTitle: String?
-   let ogImage: URL?
-   let canonical: URL?
-   let lang: String?
-  }
-
   @usableFromInline
   internal let baseURL: URL?
   private var domReadyContinuation: CheckedContinuation<Void, Never>?
   private var domReadyTask: Task<Void, Never>?
-  private let preProcessing: String?
-  private let timeout: TimeInterval
+  private let configuration: VLstack.WebLoader.Configuration
   private var timeoutTask: Task<Void, Never>?
   private var webView: WKWebView?
 
   // MARK: - Init
   private init(baseURL: URL? = nil,
-               timeout: TimeInterval? = nil,
-               preProcessing: String? = nil)
+               configuration: VLstack.WebLoader.Configuration? = nil)
   {
+   let webLoaderConfiguration: VLstack.WebLoader.Configuration = configuration ?? .init()
+
    self.baseURL = baseURL
-   self.timeout = timeout ?? 30
-   self.preProcessing = preProcessing
+   self.configuration = webLoaderConfiguration
 
    let config = WKWebViewConfiguration()
+   if webLoaderConfiguration.useEphemeralCookies
+   {
+    config.websiteDataStore = .nonPersistent()
+   }
 
    let profile = WKWebpagePreferences()
-   profile.allowsContentJavaScript = true
-   // Force explicitement la version Mobile
-   profile.preferredContentMode = .mobile
+   profile.allowsContentJavaScript = webLoaderConfiguration.allowsContentJavaScript
+   profile.preferredContentMode = webLoaderConfiguration.preferredContentMode
    config.defaultWebpagePreferences = profile
 
    let controller = WKUserContentController()
@@ -51,51 +43,53 @@ extension VLstack
    controller.addUserScript(script)
    config.userContentController = controller
 
-   self.webView = WKWebView(frame: .zero, configuration: config)
+   let wv = WKWebView(frame: .zero, configuration: config)
+   if let userAgent = configuration?.userAgent
+   {
+    wv.customUserAgent = userAgent
+   }
+
+   self.webView = wv
    super.init()
    controller.add(self, name: "domReady")
    self.webView?.navigationDelegate = self
   }
 
   convenience public init(url: URL,
-                          timeout: TimeInterval? = nil,
-                          preProcessing: String? = nil)
+                          configuration: VLstack.WebLoader.Configuration? = nil)
   {
-   self.init(baseURL: url, timeout: timeout, preProcessing: preProcessing)
+   self.init(baseURL: url, configuration: configuration)
    Task
    {
     @MainActor in
-    await blockResources()
+    await setupWebView()
     webView?.load(URLRequest(url: url))
    }
   }
 
   convenience public init(urlString: String,
-                          timeout: TimeInterval? = nil,
-                          preProcessing: String? = nil) throws
+                          configuration: VLstack.WebLoader.Configuration? = nil) throws
   {
    guard let url = URL(string: urlString) else { throw WebLoaderError.invalidURL(urlString) }
-   self.init(url: url, timeout: timeout, preProcessing: preProcessing)
+   self.init(url: url, configuration: configuration)
   }
 
   convenience public init(html: String,
                           baseURL: URL? = nil,
-                          timeout: TimeInterval? = nil,
-                          preProcessing: String? = nil)
+                          configuration: VLstack.WebLoader.Configuration? = nil)
   {
-   self.init(baseURL: baseURL, timeout: timeout, preProcessing: preProcessing)
+   self.init(baseURL: baseURL, configuration: configuration)
    Task
    {
     @MainActor in
-    await blockResources()
+    await setupWebView()
     webView?.loadHTMLString(html, baseURL: baseURL)
    }
   }
 
   convenience public init(html: String,
                           baseURLString: String? = nil,
-                          timeout: TimeInterval? = nil,
-                          preProcessing: String? = nil) throws
+                          configuration: VLstack.WebLoader.Configuration? = nil) throws
   {
    var baseURL: URL? = nil
    if let baseURLString
@@ -103,7 +97,7 @@ extension VLstack
     guard let url = URL(string: baseURLString) else { throw WebLoaderError.invalidURL(baseURLString) }
     baseURL = url
    }
-   self.init(html: html, baseURL: baseURL, timeout: timeout, preProcessing: preProcessing)
+   self.init(html: html, baseURL: baseURL, configuration: configuration)
   }
 
   // MARK: - Deinit
@@ -137,6 +131,8 @@ extension VLstack
   // MARK: - Private helper
   private func blockResources() async
   {
+   guard self.configuration.blockResources == true else { return }
+
    // TODO: find out which of this rule is targeting iframes
    //  {
    //   "trigger": { "url-filter": ".*", "resource-type": [ "document" ], "if-frame-url": [ ".*" ] },
@@ -175,9 +171,29 @@ extension VLstack
          .trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
+  @MainActor
+  private func setupWebView() async
+  {
+   if !self.configuration.cookies.isEmpty
+   {
+    let store = webView?.configuration.websiteDataStore.httpCookieStore
+    for cookie in self.configuration.cookies
+    {
+     await store?.setCookie(cookie)
+    }
+   }
+
+   if self.configuration.blockResources
+   {
+    await blockResources()
+   }
+  }
+
   // MARK: - Wait for DOM ready
   private func startWaitForDOMReady() async
   {
+   let timeoutNanoseconds = UInt64(self.configuration.timeout * 1_000_000_000)
+
    await withCheckedContinuation
    {
     continuation in
@@ -187,7 +203,7 @@ extension VLstack
     timeoutTask?.cancel()
     timeoutTask = Task
     {
-     try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+     try? await Task.sleep(nanoseconds: timeoutNanoseconds)
      guard timeoutTask?.isCancelled == false else { return }
      resumeContinuation()
     }
@@ -202,13 +218,24 @@ extension VLstack
     return
    }
 
+   let preProcessingJavascript = self.configuration.preProcessingJavaScript
+   let preProcessingTiming = self.configuration.preProcessingTiming
    let task = Task
    {
     await startWaitForDOMReady()
-    try? await run(js: Self.stopObserverJS)
-    if let preProcessing
+
+    if preProcessingTiming == .beforeStopObserver,
+       let preProcessingJavascript
     {
-     try? await run(js: preProcessing)
+     try? await run(js: preProcessingJavascript)
+    }
+
+    try? await run(js: Self.stopObserverJS)
+
+    if preProcessingTiming == .afterStopObserver,
+       let preProcessingJavascript
+    {
+     try? await run(js: preProcessingJavascript)
     }
    }
    domReadyTask = task
