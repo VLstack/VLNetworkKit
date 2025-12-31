@@ -218,25 +218,10 @@ extension VLstack
     return
    }
 
-   let preProcessingJavascript = self.configuration.preProcessingJavaScript
-   let preProcessingTiming = self.configuration.preProcessingTiming
    let task = Task
    {
     await startWaitForDOMReady()
-
-    if preProcessingTiming == .beforeStopObserver,
-       let preProcessingJavascript
-    {
-     try? await run(js: preProcessingJavascript)
-    }
-
     try? await run(js: Self.stopObserverJS)
-
-    if preProcessingTiming == .afterStopObserver,
-       let preProcessingJavascript
-    {
-     try? await run(js: preProcessingJavascript)
-    }
    }
    domReadyTask = task
 
