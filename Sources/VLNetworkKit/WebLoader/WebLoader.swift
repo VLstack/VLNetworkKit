@@ -76,6 +76,7 @@ extension VLstack
 
   convenience public init(html: String,
                           baseURL: URL? = nil,
+                          sanitize: VLstack.WebLoader.HtmlSanitizationOptions = .nothing,
                           configuration: VLstack.WebLoader.Configuration? = nil)
   {
    self.init(baseURL: baseURL, configuration: configuration)
@@ -85,16 +86,27 @@ extension VLstack
     await setupWebView()
 
     var injectedHtml: String = html
-    if configuration?.sanitizeHtmlSourceScripts == true
+
+    if sanitize.contains(.script)
     {
      injectedHtml = injectedHtml.replacing(/(?i)<script\b[^>]*>[\s\S]*?<\/script>/, with: "")
      injectedHtml = injectedHtml.replacing(/(?i)<script\b[^>]*\/>/, with: "")
     }
 
-    if configuration?.sanitizeHtmlSourceIframes == true
+    if sanitize.contains(.iframe)
     {
      injectedHtml = injectedHtml.replacing(/(?i)<iframe\b[^>]*>[\s\S]*?<\/iframe>/, with: "")
      injectedHtml = injectedHtml.replacing(/(?i)<iframe\b[^>]*\/>/, with: "")
+    }
+
+    if sanitize.contains(.style)
+    {
+     injectedHtml = injectedHtml.replacing(/(?i)<style\b[^>]*>[\s\S]*?<\/style>/, with: "")
+    }
+
+    if sanitize.contains(.link)
+    {
+     injectedHtml = injectedHtml.replacing(/(?i)<link\b[^>]*\/?>/, with: "")
     }
 
     webView?.loadHTMLString(injectedHtml, baseURL: baseURL)
@@ -103,6 +115,7 @@ extension VLstack
 
   convenience public init(html: String,
                           baseURLString: String? = nil,
+                          sanitize: VLstack.WebLoader.HtmlSanitizationOptions = .nothing,
                           configuration: VLstack.WebLoader.Configuration? = nil) throws
   {
    var baseURL: URL? = nil
@@ -111,7 +124,7 @@ extension VLstack
     guard let url = URL(string: baseURLString) else { throw WebLoaderError.invalidURL(baseURLString) }
     baseURL = url
    }
-   self.init(html: html, baseURL: baseURL, configuration: configuration)
+   self.init(html: html, baseURL: baseURL, sanitize: sanitize, configuration: configuration)
   }
 
   // MARK: - Deinit
