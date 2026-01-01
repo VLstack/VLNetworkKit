@@ -83,7 +83,21 @@ extension VLstack
    {
     @MainActor in
     await setupWebView()
-    webView?.loadHTMLString(html, baseURL: baseURL)
+
+    var injectedHtml: String = html
+    if configuration?.sanitizeHtmlSourceScripts == true
+    {
+     injectedHtml = injectedHtml.replacing(/(?i)<script\b[^>]*>[\s\S]*?<\/script>/, with: "")
+     injectedHtml = injectedHtml.replacing(/(?i)<script\b[^>]*\/>/, with: "")
+    }
+
+    if configuration?.sanitizeHtmlSourceIframes == true
+    {
+     injectedHtml = injectedHtml.replacing(/(?i)<iframe\b[^>]*>[\s\S]*?<\/iframe>/, with: "")
+     injectedHtml = injectedHtml.replacing(/(?i)<iframe\b[^>]*\/>/, with: "")
+    }
+
+    webView?.loadHTMLString(injectedHtml, baseURL: baseURL)
    }
   }
 
