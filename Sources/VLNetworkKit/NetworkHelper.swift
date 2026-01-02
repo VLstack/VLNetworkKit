@@ -6,6 +6,21 @@ extension VLstack
  public enum NetworkHelper
  {
   @inlinable
+  static public func toAbsoluteURLs(urls: Set<URL>,
+                                    baseURL expectedBase: URL?) -> Set<URL>
+  {
+   let absolutes = urls.compactMap
+   {
+    url -> URL? in
+    guard url.scheme == nil else { return url }
+
+    return URL(string: url.relativeString, relativeTo: expectedBase)
+   }
+
+   return Set(absolutes.compactMap(\.absoluteURL))
+  }
+
+  @inlinable
   static public func toAbsoluteURLs(urls: Set<String>,
                                     baseURL expectedBase: URL?) -> Set<URL>
   {
