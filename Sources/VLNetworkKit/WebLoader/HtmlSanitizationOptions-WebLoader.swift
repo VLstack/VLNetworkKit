@@ -1,6 +1,5 @@
-import VLstackNamespace
-
-extension VLstack.WebLoader
+// TODO: enlever le suffixe -WebLoader
+extension VLWebLoader
 {
  public struct HtmlSanitizationOptions: OptionSet, Sendable
  {

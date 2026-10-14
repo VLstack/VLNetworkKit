@@ -1,7 +1,7 @@
+// TODO: enlever le suffixe -WebLoader
 import Foundation
-import VLstackNamespace
 
-extension VLstack.WebLoader
+extension VLWebLoader
 {
  public struct Metadata: Sendable
  {

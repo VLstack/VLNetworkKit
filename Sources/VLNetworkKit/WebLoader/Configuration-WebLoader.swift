@@ -1,8 +1,8 @@
+// TODO: enlever le suffixe -WebLoader
 import Foundation
-import VLstackNamespace
 import WebKit
 
-extension VLstack.WebLoader
+extension VLWebLoader
 {
  public struct Configuration: Sendable
  {
