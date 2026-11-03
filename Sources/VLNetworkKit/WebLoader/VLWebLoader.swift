@@ -162,17 +162,6 @@ public final class VLWebLoader: NSObject
  {
   guard self.configuration.blockResources == true else { return }
 
-  // TODO: find out which of this rule is targeting iframes
-  //  {
-  //   "trigger": { "url-filter": ".*", "resource-type": [ "document" ], "if-frame-url": [ ".*" ] },
-  //   "action": { "type": "block" }
-  //  },
-
-  //  {
-  //   "trigger": { "url-filter": ".*", "load-context": [ "child-frame" ] },
-  //   "action": { "type": "block" }
-  //  },
-
   let rules = """
  [
   {

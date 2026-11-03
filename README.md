@@ -11,7 +11,7 @@ Fetching and reading web pages on iOS 17+, written for Swift 6 strict concurrenc
 Swift Package Manager:
 
 ```swift
-.package(url: "https://github.com/VLstack/VLNetworkKit", from: "3.0.0")
+.package(url: "https://github.com/VLstack/VLNetworkKit", from: "3.0.1")
 ```
 
 ## VLFetcher
