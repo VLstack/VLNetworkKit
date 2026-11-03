@@ -83,47 +83,6 @@
         }
       }
     },
-    "I18N-VLNetworkKit.ExceedMaxSize" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Die Antwort überschreitet die erlaubte Größe"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The response exceeds the allowed size"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La respuesta supera el tamaño permitido"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La réponse dépasse la taille autorisée"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La risposta supera la dimensione consentita"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "レスポンスが許可されたサイズを超えています"
-          }
-        }
-      }
-    },
     "I18N-VLNetworkKit.HTTPError %lld" : {
       "extractionState" : "manual",
       "localizations" : {

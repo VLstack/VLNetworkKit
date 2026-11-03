@@ -118,29 +118,6 @@ struct FetcherTests
   #expect(error?.label == "contentTypeMismatch")
  }
 
- @Test("Size equal to the maximum is accepted")
- func maxSizeLimit() async throws
- {
-  let url = try register()
-
-  let content = try await fetcher.fetchContent(url: url, options: [ .maxSize(7) ])
-
-  #expect(content == "Bonjour")
- }
-
- @Test("Size above the maximum is refused")
- func maxSizeExceeded() async throws
- {
-  let url = try register()
-
-  let error = await #expect(throws: VLFetchError.self)
-  {
-   try await fetcher.fetchContent(url: url, options: [ .maxSize(6) ])
-  }
-
-  #expect(error?.label == "exceedMaxSize")
- }
-
  // MARK: - Encoding
  @Test("Invalid bytes give a decoding error")
  func decodingError() async throws
@@ -258,7 +235,6 @@ private extension VLFetchError
   {
    case .invalidResponse:           "invalidResponse"
    case .contentTypeMismatch:       "contentTypeMismatch"
-   case .exceedMaxSize:             "exceedMaxSize"
    case .httpError(let statusCode): "httpError(\(statusCode))"
    case .decodingError:             "decodingError"
    case .timeout:                   "timeout"

@@ -5,7 +5,6 @@ public enum VLFetchError: Error, LocalizedError
 {
  case invalidResponse
  case contentTypeMismatch
- case exceedMaxSize
  case httpError(statusCode: Int)
  case decodingError
  case timeout
@@ -19,9 +18,6 @@ public enum VLFetchError: Error, LocalizedError
 
    case .contentTypeMismatch:
     return Bundle.main.localizedString("I18N-VLNetworkKit.ContentTypeMismatch", fallbackModule: .module)
-
-   case .exceedMaxSize:
-    return Bundle.main.localizedString("I18N-VLNetworkKit.ExceedMaxSize", fallbackModule: .module)
 
    case .httpError(let statusCode):
     // The catalog key holds the format, the value is inserted after the lookup

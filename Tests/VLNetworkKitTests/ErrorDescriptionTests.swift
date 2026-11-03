@@ -21,7 +21,7 @@ struct ErrorDescriptionTests
  }
 
  @Test("Fetch errors without value are translated",
-       arguments: [ VLFetchError.invalidResponse, .contentTypeMismatch, .exceedMaxSize, .decodingError, .timeout ])
+       arguments: [ VLFetchError.invalidResponse, .contentTypeMismatch, .decodingError, .timeout ])
  func fetchErrors(_ error: VLFetchError)
  {
   #expect(isTranslated(error.errorDescription))

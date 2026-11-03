@@ -11,7 +11,7 @@ Fetching and reading web pages on iOS 17+, written for Swift 6 strict concurrenc
 Swift Package Manager:
 
 ```swift
-.package(url: "https://github.com/VLstack/VLNetworkKit", from: "2.2.0")
+.package(url: "https://github.com/VLstack/VLNetworkKit", from: "3.0.0")
 ```
 
 ## VLFetcher
@@ -25,7 +25,6 @@ let html = try await fetcher.fetchContent(url: url)
 // Raw data, with options
 let data = try await fetcher.fetchData(url: imageURL,
                                        options: [ .expectedContentType("image/jpeg"),
-                                                  .maxSize(5_000_000),
                                                   .timeout(10),
                                                   .additionalHeaders([ "Accept-Language": "fr" ]) ])
 
@@ -33,7 +32,7 @@ let data = try await fetcher.fetchData(url: imageURL,
 let result = try await fetcher.fetch(url: url, decodeAsString: true)
 ```
 
-`.encoding(...)` forces the text encoding. Errors are `VLFetchError` (HTTP status, content type, size, decoding, timeout) or the `URLError` of the session.
+`.encoding(...)` forces the text encoding. Errors are `VLFetchError` (HTTP status, content type, decoding, timeout) or the `URLError` of the session.
 
 ## VLWebLoader
 

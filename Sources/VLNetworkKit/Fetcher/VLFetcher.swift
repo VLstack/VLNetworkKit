@@ -41,10 +41,6 @@ public actor VLFetcher
   }
 
   let size = data.count
-  if let maxSize = config.maxSize
-  {
-   guard size <= maxSize else { throw VLFetchError.exceedMaxSize }
-  }
 
   let content: String
   if decodeAsString
@@ -101,7 +97,6 @@ public actor VLFetcher
   /// Encoding forced by the caller, nil to use the charset announced by the server
   var encoding: String.Encoding?
   var expectedContentType: String?
-  var maxSize: Int?
   var timeout: TimeInterval
  }
 
@@ -129,7 +124,6 @@ public actor VLFetcher
     case .additionalHeaders(let headers): config.additionalHeaders = headers
     case .encoding(let encoding):         config.encoding = encoding
     case .expectedContentType(let type):  config.expectedContentType = type
-    case .maxSize(let size):              config.maxSize = size
     case .timeout(let timeout):           config.timeout = timeout
    }
   }
