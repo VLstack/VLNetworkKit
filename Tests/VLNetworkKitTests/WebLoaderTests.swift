@@ -280,6 +280,38 @@ struct WebLoaderTests
   #expect(baseError?.label == "invalidURL")
  }
 
+ /// Expected to fail before 2.2.0 (TODO, point 17): getValue did not wait for the page
+ @Test("getValue waits for the page")
+ func getValueWaitsForPage() async throws
+ {
+  let loader = makeLoader(body: "<p>Texte</p>", head: "<title>Tarte</title>")
+
+  let title: String = try await loader.getValue(js: "document.title")
+
+  #expect(title == "Tarte")
+ }
+
+ /// Expected to fail before 2.2.0 (TODO, point 7): quotes of the selector were replaced
+ @Test("Selector may contain quotes")
+ func selectorWithQuotes() async throws
+ {
+  let loader = makeLoader(body: "<img alt=\"l'oeuf\" src=\"img/oeuf.jpg\"><p data-note='dire \"oui\"'>Note</p>")
+
+  #expect(try await loader.getAttribute("src", of: "img[alt=\"l'oeuf\"]") == "img/oeuf.jpg")
+  #expect(try await loader.getTextContent(of: "[data-note='dire \"oui\"']") == "Note")
+ }
+
+ /// Expected to fail before 2.2.0 (TODO, point 7): the attribute name could end the JavaScript string
+ @Test("Attribute name cannot run JavaScript")
+ func attributeInjection() async throws
+ {
+  let loader = makeLoader(body: "<p>Texte</p>")
+
+  _ = try? await loader.getAttribute("x\") || document.body.remove() || (\"", of: "p")
+
+  #expect(try await loader.getTextContent() == "Texte")
+ }
+
  // MARK: - Waiting and memory
  @Test("Page that never becomes stable ends at the timeout")
  func timeout() async throws

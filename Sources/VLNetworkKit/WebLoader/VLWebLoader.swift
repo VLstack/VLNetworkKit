@@ -1,5 +1,4 @@
 import Foundation
-import VLStringKit
 import WebKit
 
 @MainActor
@@ -13,7 +12,7 @@ public final class VLWebLoader: NSObject
  private var isDOMReady = false
  private let configuration: VLWebLoader.Configuration
  private var timeoutTask: Task<Void, Never>?
- private var webView: WKWebView?
+ private let webView: WKWebView
 
  // MARK: - Init
  private init(baseURL: URL? = nil,
@@ -52,7 +51,7 @@ public final class VLWebLoader: NSObject
   super.init()
   // The controller retains its handlers: the relay keeps the loader weak to avoid a retain cycle
   controller.add(WeakScriptMessageHandler(self), name: "domReady")
-  self.webView?.navigationDelegate = self
+  self.webView.navigationDelegate = self
  }
 
  convenience public init(url: URL,
@@ -63,7 +62,7 @@ public final class VLWebLoader: NSObject
   {
    @MainActor in
    await setupWebView()
-   webView?.load(URLRequest(url: url))
+   webView.load(URLRequest(url: url))
   }
  }
 
@@ -109,7 +108,7 @@ public final class VLWebLoader: NSObject
     injectedHtml = injectedHtml.replacing(/(?i)<link\b[^>]*\/?>/, with: "")
    }
 
-   webView?.loadHTMLString(injectedHtml, baseURL: baseURL)
+   webView.loadHTMLString(injectedHtml, baseURL: baseURL)
   }
  }
 
@@ -136,11 +135,10 @@ public final class VLWebLoader: NSObject
   domReadyTask?.cancel()
   domReadyTask = nil
   domReadyContinuation = nil
-  webView?.configuration.userContentController.removeScriptMessageHandler(forName: "domReady")
-  webView?.navigationDelegate = nil
-  webView?.stopLoading()
-  webView?.configuration.userContentController.removeAllUserScripts()
-  webView = nil
+  webView.configuration.userContentController.removeScriptMessageHandler(forName: "domReady")
+  webView.navigationDelegate = nil
+  webView.stopLoading()
+  webView.configuration.userContentController.removeAllUserScripts()
  }
 
  // MARK: - Continuation
@@ -157,6 +155,9 @@ public final class VLWebLoader: NSObject
  }
 
  // MARK: - Private helper
+ /// Identifier of the compiled rule list kept by WebKit: change its version when the rules change
+ private static let blockResourcesIdentifier = "VLNetworkKit.WebLoader.blockResources.v1"
+
  private func blockResources() async
  {
   guard self.configuration.blockResources == true else { return }
@@ -181,12 +182,23 @@ public final class VLWebLoader: NSObject
  ]
  """
 
-  guard let store = WKContentRuleListStore.default(),
-        let ruleList = try? await store.compileContentRuleList(forIdentifier: "VLNetwork_WebLoader_blockResources",
-                                                               encodedContentRuleList: rules)
-  else { return }
+  guard let store = WKContentRuleListStore.default() else { return }
 
-  webView?.configuration.userContentController.add(ruleList)
+  // The list compiled by a previous loader is reused, it is compiled only the first time
+  let ruleList: WKContentRuleList?
+  if let compiled = try? await store.contentRuleList(forIdentifier: Self.blockResourcesIdentifier)
+  {
+   ruleList = compiled
+  }
+  else
+  {
+   ruleList = try? await store.compileContentRuleList(forIdentifier: Self.blockResourcesIdentifier,
+                                                      encodedContentRuleList: rules)
+  }
+
+  guard let ruleList else { return }
+
+  webView.configuration.userContentController.add(ruleList)
  }
 
  private func clean(string: String) -> String
@@ -212,10 +224,10 @@ public final class VLWebLoader: NSObject
  {
   if !self.configuration.cookies.isEmpty
   {
-   let store = webView?.configuration.websiteDataStore.httpCookieStore
+   let store = webView.configuration.websiteDataStore.httpCookieStore
    for cookie in self.configuration.cookies
    {
-    await store?.setCookie(cookie)
+    await store.setCookie(cookie)
    }
   }
 
@@ -260,7 +272,8 @@ public final class VLWebLoader: NSObject
   let task = Task
   {
    await startWaitForDOMReady()
-   try? await run(js: Self.stopObserverJS)
+   // Without waiting: `run` would wait for this very task
+   try? await execute(js: Self.stopObserverJS)
   }
   domReadyTask = task
 
@@ -268,13 +281,27 @@ public final class VLWebLoader: NSObject
  }
 
  // MARK: - Javascript
- /// Evaluates `js` and returns its result; a JavaScript `null` is returned as nil (for an optional `T`)
+ /// Waits for the page, evaluates `js` and returns its result; a JavaScript `null` is returned as nil (for an optional `T`)
  public func getValue<T>(js: String) async throws -> T where T: Sendable
+ {
+  await waitForDOMReady()
+
+  return try await evaluate(js: js)
+ }
+
+ /// Waits for the page, then runs `js`
+ public func run(js: String) async throws
+ {
+  await waitForDOMReady()
+  try await execute(js: js)
+ }
+
+ private func evaluate<T>(js: String) async throws -> T where T: Sendable
  {
   try await withCheckedThrowingContinuation
   {
    continuation in
-   webView?.evaluateJavaScript(js)
+   webView.evaluateJavaScript(js)
    {
     result, error in
     let value: Any? = result is NSNull ? nil : result
@@ -290,12 +317,12 @@ public final class VLWebLoader: NSObject
   }
  }
 
- public func run(js: String) async throws
+ private func execute(js: String) async throws
  {
   try await withCheckedThrowingContinuation
   {
    (continuation: CheckedContinuation<Void, any Error>) in
-   webView?.evaluateJavaScript(js)
+   webView.evaluateJavaScript(js)
    {
     _, error in
     if let error { continuation.resume(throwing: VLWebLoaderError.javascriptEvaluationFailed(error)) }
@@ -308,12 +335,11 @@ public final class VLWebLoader: NSObject
  public func getAttribute(_ attribute: String,
                           of selector: String) async throws -> String?
  {
-  await waitForDOMReady()
   let js = """
  (function()
  {
   const el = \(Self.documentQuerySelector(selector));
-  return el ? el.getAttribute("\(attribute)") : null;
+  return el ? el.getAttribute(\(Self.javaScriptString(attribute))) : null;
  })();
  """
 
@@ -322,7 +348,6 @@ public final class VLWebLoader: NSObject
 
  public func getCanonicalURL() async throws -> URL?
  {
-  await waitForDOMReady()
   let string: String = try await getValue(js: "(document.querySelector('link[rel=canonical]')?.href) || ''")
 
   return URL(string: string)
@@ -346,7 +371,6 @@ public final class VLWebLoader: NSObject
 
  public func getImagesURLString() async throws -> Set<String>
  {
-  await waitForDOMReady()
   let urls: [ String ] = try await getValue(js: Self.imagesSourcesJS)
 
   return Set(urls)
@@ -354,7 +378,6 @@ public final class VLWebLoader: NSObject
 
  public func getInnerHTML(of selector: String? = nil) async throws -> String
  {
-  await waitForDOMReady()
   let node = if let selector { Self.documentQuerySelector(selector) } else { "document.body" }
 
   return try await getValue(js: "\(node).innerHTML || \"\"")
@@ -362,7 +385,6 @@ public final class VLWebLoader: NSObject
 
  public func getInnerText(of selector: String? = nil) async throws -> String
  {
-  await waitForDOMReady()
   let node = if let selector { Self.documentQuerySelector(selector) } else { "document.body" }
   let raw: String = try await getValue(js: "\(node).innerText || ''")
 
@@ -371,7 +393,6 @@ public final class VLWebLoader: NSObject
 
  public func getLanguage() async throws -> String?
  {
-  await waitForDOMReady()
   let lang: String = try await getValue(js: "document.documentElement.getAttribute('lang') || ''")
 
   return lang.isEmpty ? nil : lang
@@ -395,7 +416,6 @@ public final class VLWebLoader: NSObject
 
  public func getLinksURLString() async throws -> Set<String>
  {
-  await waitForDOMReady()
   let strings: [ String ] = try await getValue(js: "Array.from(document.querySelectorAll('a[href]')).map(a => a.href)")
 
   return Set(strings)
@@ -403,7 +423,6 @@ public final class VLWebLoader: NSObject
 
  public func getMetadata() async throws -> Metadata
  {
-  await waitForDOMReady()
   let js = """
  ({
    "title": document.title || "",
@@ -427,7 +446,6 @@ public final class VLWebLoader: NSObject
 
  public func getTextContent(of selector: String? = nil) async throws -> String
  {
-  await waitForDOMReady()
   let raw: String = try await getValue(js: Self.recursiveTextContentJS(of: selector))
 
   return clean(string: raw)
@@ -435,7 +453,6 @@ public final class VLWebLoader: NSObject
 
  public func removeNodes(_ selectors: [ String ]) async throws
  {
-  await waitForDOMReady()
   let nodes = selectors.joined(separator: ", ")
   try await run(js: "\(Self.documentQuerySelectorAll(nodes)).forEach(el => el.remove())")
  }
@@ -502,22 +519,24 @@ extension VLWebLoader: WKNavigationDelegate
 // MARK: - Injected JS
 extension VLWebLoader
 {
- @inlinable
  internal static func documentQuerySelector(_ selector: String) -> String
  {
-  "document.querySelector('\(Self.selector(selector))')"
+  "document.querySelector(\(Self.javaScriptString(selector)))"
  }
 
- @inlinable
  internal static func documentQuerySelectorAll(_ selector: String) -> String
  {
-  "document.querySelectorAll('\(Self.selector(selector))')"
+  "document.querySelectorAll(\(Self.javaScriptString(selector)))"
  }
 
- @inlinable
- internal static func selector(_ string: String) -> String
+ /// JavaScript string literal of `string`, escaped by JSON encoding: quotes, backslashes and line breaks can never end the string
+ internal static func javaScriptString(_ string: String) -> String
  {
-  string.replacingOccurrences(of: "'", with: "\"")
+  guard let data = try? JSONEncoder().encode(string),
+        let literal = String(data: data, encoding: .utf8)
+  else { return "\"\"" }
+
+  return literal
  }
 
  private static let domObserverJS = """

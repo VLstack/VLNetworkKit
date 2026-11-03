@@ -20,13 +20,12 @@ let package = Package(name: "VLNetworkKit",
                       ],
                       dependencies:
                       [
-                       .package(url: "https://github.com/VLstack/VLBundleKit", from: "1.5.1"),
-                       .package(url: "https://github.com/VLstack/VLStringKit", from: "2.5.1")
+                       .package(url: "https://github.com/VLstack/VLBundleKit", from: "1.5.1")
                       ],
                       targets:
                       [
                        .target(name: "VLNetworkKit",
-                               dependencies: [ "VLBundleKit", "VLStringKit" ],
+                               dependencies: [ "VLBundleKit" ],
                                resources: [ .process("Resources") ],
                                swiftSettings: swiftSettings),
                        .testTarget(name: "VLNetworkKitTests",
