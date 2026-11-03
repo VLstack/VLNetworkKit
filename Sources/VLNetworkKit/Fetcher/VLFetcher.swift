@@ -17,7 +17,15 @@ public actor VLFetcher
   let config = parseOptions(options)
   let request = buildRequest(url: url, config: config)
 
-  let (data, response) = try await session.data(for: request)
+  let (data, response): (Data, URLResponse)
+  do
+  {
+   (data, response) = try await session.data(for: request)
+  }
+  catch let error as URLError where error.code == .timedOut
+  {
+   throw VLFetchError.timeout
+  }
 
   guard let httpResponse = response as? HTTPURLResponse else { throw VLFetchError.invalidResponse }
 
@@ -41,7 +49,9 @@ public actor VLFetcher
   let content: String
   if decodeAsString
   {
-   guard let decoded = String(data: data, encoding: config.encoding) else { throw VLFetchError.decodingError }
+   // The encoding option wins, then the charset announced by the server, then UTF-8
+   let encoding = config.encoding ?? Self.announcedEncoding(of: httpResponse) ?? .utf8
+   guard let decoded = String(data: data, encoding: encoding) else { throw VLFetchError.decodingError }
    content = decoded
   }
   else
@@ -88,16 +98,27 @@ public actor VLFetcher
  private struct RequestConfig
  {
   var additionalHeaders: [String: String]
-  var encoding: String.Encoding
+  /// Encoding forced by the caller, nil to use the charset announced by the server
+  var encoding: String.Encoding?
   var expectedContentType: String?
   var maxSize: Int?
   var timeout: TimeInterval
  }
 
+ /// Encoding of the charset announced in the `Content-Type` header, nil if absent or unknown
+ private static func announcedEncoding(of response: HTTPURLResponse) -> String.Encoding?
+ {
+  guard let name = response.textEncodingName else { return nil }
+
+  let cfEncoding = CFStringConvertIANACharSetNameToEncoding(name as CFString)
+  guard cfEncoding != kCFStringEncodingInvalidId else { return nil }
+
+  return String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(cfEncoding))
+ }
+
  private func parseOptions(_ options: [ VLFetchOption ]?) -> RequestConfig
  {
   var config = RequestConfig(additionalHeaders: [:],
-                             encoding: .utf8,
                              timeout: 30.0)
 
   options?.forEach

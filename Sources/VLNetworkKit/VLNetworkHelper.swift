@@ -2,6 +2,7 @@ import Foundation
 
 public enum VLNetworkHelper
 {
+ /// Resolves relative URLs against `expectedBase`; URLs still without scheme (relative without base) are dropped
  @inlinable
  static public func toAbsoluteURLs(urls: Set<URL>,
                                    baseURL expectedBase: URL?) -> Set<URL>
@@ -14,9 +15,10 @@ public enum VLNetworkHelper
    return URL(string: url.relativeString, relativeTo: expectedBase)
   }
 
-  return Set(absolutes.compactMap(\.absoluteURL))
+  return Set(absolutes.map(\.absoluteURL).filter { $0.scheme != nil })
  }
 
+ /// Resolves relative URL strings against `expectedBase`; URLs still without scheme (relative without base) are dropped
  @inlinable
  static public func toAbsoluteURLs(urls: Set<String>,
                                    baseURL expectedBase: URL?) -> Set<URL>
@@ -24,13 +26,13 @@ public enum VLNetworkHelper
   let absolutes = urls.compactMap
   {
    string -> URL? in
-   // On essaie d'abord de créer une URL absolue
+   // An absolute URL is kept as is
    if let url = URL(string: string), url.scheme != nil { return url }
-   // Sinon, on la résout par rapport à la base URL en paramètre ou founie au constructeur
+   // Otherwise it is resolved against the given base
    return URL(string: string, relativeTo: expectedBase)
   }
 
-  return Set(absolutes.compactMap(\.absoluteURL))
+  return Set(absolutes.map(\.absoluteURL).filter { $0.scheme != nil })
  }
 
  @inlinable
@@ -40,6 +42,6 @@ public enum VLNetworkHelper
   let absolutes = VLNetworkHelper.toAbsoluteURLs(urls: urls,
                                                  baseURL: expectedBase)
 
-  return Set(absolutes.compactMap(\.absoluteString))
+  return Set(absolutes.map(\.absoluteString))
  }
 }

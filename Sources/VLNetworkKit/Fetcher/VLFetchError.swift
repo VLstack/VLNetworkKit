@@ -1,4 +1,4 @@
-import SwiftUI
+import Foundation
 import VLBundleKit
 
 public enum VLFetchError: Error, LocalizedError
@@ -24,7 +24,9 @@ public enum VLFetchError: Error, LocalizedError
     return Bundle.main.localizedString("I18N-VLNetworkKit.ExceedMaxSize", fallbackModule: .module)
 
    case .httpError(let statusCode):
-    return Bundle.main.localizedString("I18N-VLNetworkKit.HTTPError \(statusCode)", fallbackModule: .module)
+    // The catalog key holds the format, the value is inserted after the lookup
+    let format = Bundle.main.localizedString("I18N-VLNetworkKit.HTTPError %lld", fallbackModule: .module)
+    return String(format: format, statusCode)
 
    case .decodingError:
     return Bundle.main.localizedString("I18N-VLNetworkKit.DecodingError", fallbackModule: .module)

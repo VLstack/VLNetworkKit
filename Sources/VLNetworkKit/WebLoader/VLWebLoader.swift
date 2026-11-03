@@ -9,6 +9,8 @@ public final class VLWebLoader: NSObject
  internal let baseURL: URL?
  private var domReadyContinuation: CheckedContinuation<Void, Never>?
  private var domReadyTask: Task<Void, Never>?
+ /// Set once the page is stable (or the timeout is reached), even if nobody was waiting yet
+ private var isDOMReady = false
  private let configuration: VLWebLoader.Configuration
  private var timeoutTask: Task<Void, Never>?
  private var webView: WKWebView?
@@ -48,7 +50,8 @@ public final class VLWebLoader: NSObject
 
   self.webView = wv
   super.init()
-  controller.add(self, name: "domReady")
+  // The controller retains its handlers: the relay keeps the loader weak to avoid a retain cycle
+  controller.add(WeakScriptMessageHandler(self), name: "domReady")
   self.webView?.navigationDelegate = self
  }
 
@@ -143,6 +146,7 @@ public final class VLWebLoader: NSObject
  // MARK: - Continuation
  private func resumeContinuation()
  {
+  isDOMReady = true
   timeoutTask?.cancel()
   timeoutTask = nil
   if let continuation = domReadyContinuation
@@ -174,7 +178,7 @@ public final class VLWebLoader: NSObject
    "trigger": { "url-filter": ".*", "resource-type": [ "image", "style-sheet", "media", "font" ] },
    "action": { "type": "block" }
   }
- ] 
+ ]
  """
 
   guard let store = WKContentRuleListStore.default(),
@@ -189,10 +193,18 @@ public final class VLWebLoader: NSObject
  {
   string.replacingOccurrences(of: "&nbsp;", with: " ")
         .replacingOccurrences(of: "\u{00A0}", with: " ")
-        .replacingOccurrences(of: "  ", with: " ")
+        .replacing(/\ {2,}/, with: " ")
         .replacingOccurrences(of: "\t", with: "  ")
-        .replacingOccurrences(of: "\n\n\n", with: "\n\n")
+        .replacing(/\n{3,}/, with: "\n\n")
         .trimmingCharacters(in: .whitespacesAndNewlines)
+ }
+
+ /// Empty strings returned by the page mean "no value"
+ private static func nonEmpty(_ value: String?) -> String?
+ {
+  guard let value, !value.isEmpty else { return nil }
+
+  return value
  }
 
  @MainActor
@@ -216,6 +228,9 @@ public final class VLWebLoader: NSObject
  // MARK: - Wait for DOM ready
  private func startWaitForDOMReady() async
  {
+  // The page may already be stable: its signal came before the first call
+  guard !isDOMReady else { return }
+
   let timeoutNanoseconds = UInt64(self.configuration.timeout * 1_000_000_000)
 
   await withCheckedContinuation
@@ -223,7 +238,7 @@ public final class VLWebLoader: NSObject
    continuation in
    self.domReadyContinuation = continuation
 
-   // Déclenche le timeout de vérification au cas ou le DOM ne se stabilise jamais (pub infini qui s'autorecharge, page cassée, js infini, call XHR infini, etc.)
+   // Timeout in case the DOM never becomes stable (endlessly reloading ads, broken page, endless JS or XHR calls, etc.)
    timeoutTask?.cancel()
    timeoutTask = Task
    {
@@ -253,6 +268,7 @@ public final class VLWebLoader: NSObject
  }
 
  // MARK: - Javascript
+ /// Evaluates `js` and returns its result; a JavaScript `null` is returned as nil (for an optional `T`)
  public func getValue<T>(js: String) async throws -> T where T: Sendable
  {
   try await withCheckedThrowingContinuation
@@ -261,8 +277,9 @@ public final class VLWebLoader: NSObject
    webView?.evaluateJavaScript(js)
    {
     result, error in
+    let value: Any? = result is NSNull ? nil : result
     if let error { continuation.resume(throwing: VLWebLoaderError.javascriptEvaluationFailed(error)) }
-    else if let value = result as? T { continuation.resume(returning: value) }
+    else if let value = value as? T { continuation.resume(returning: value) }
     else
     {
      let expected = String(describing: T.self)
@@ -277,7 +294,7 @@ public final class VLWebLoader: NSObject
  {
   try await withCheckedThrowingContinuation
   {
-   (continuation: CheckedContinuation<Void, Error>) in
+   (continuation: CheckedContinuation<Void, any Error>) in
    webView?.evaluateJavaScript(js)
    {
     _, error in
@@ -400,12 +417,12 @@ public final class VLWebLoader: NSObject
 
   let dict: [ String: String ] = try await getValue(js: js)
 
-  return Metadata(title: dict["title"],
-                  description: dict["description"],
-                  ogTitle: dict["ogTitle"],
-                  ogImage: (dict["ogImage"]).flatMap(URL.init),
-                  canonical: (dict["canonical"]).flatMap(URL.init),
-                  lang: dict["lang"])
+  return Metadata(title: Self.nonEmpty(dict["title"]),
+                  description: Self.nonEmpty(dict["description"]),
+                  ogTitle: Self.nonEmpty(dict["ogTitle"]),
+                  ogImage: Self.nonEmpty(dict["ogImage"]).flatMap(URL.init(string:)),
+                  canonical: Self.nonEmpty(dict["canonical"]).flatMap(URL.init(string:)),
+                  lang: Self.nonEmpty(dict["lang"]))
  }
 
  public func getTextContent(of selector: String? = nil) async throws -> String
@@ -452,15 +469,33 @@ extension VLWebLoader: WKScriptMessageHandler
  }
 }
 
+/// Forwards the script messages to the loader without retaining it
+@MainActor
+private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler
+{
+ private weak var loader: VLWebLoader?
+
+ init(_ loader: VLWebLoader)
+ {
+  self.loader = loader
+ }
+
+ func userContentController(_ userContentController: WKUserContentController,
+                            didReceive message: WKScriptMessage)
+ {
+  loader?.userContentController(userContentController, didReceive: message)
+ }
+}
+
 // MARK: - WKNavigationDelegate
 extension VLWebLoader: WKNavigationDelegate
 {
  public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!)
  {
-  // Intentionnellement vide :
-  // - nécessaire pour la stabilité WebKit
-  // - permet d'ajouter des comportements plus tard
-  // - évite certains bugs de scripts non injectés
+  // Intentionally empty:
+  // - needed for WebKit stability
+  // - allows adding behaviors later
+  // - avoids some bugs with scripts not being injected
  }
 }
 
@@ -486,10 +521,10 @@ extension VLWebLoader
  }
 
  private static let domObserverJS = """
- (function() 
+ (function()
  {
   let timeout;
-  window.__webLoaderObserver = new MutationObserver(() => 
+  window.__webLoaderObserver = new MutationObserver(() =>
   {
    clearTimeout(timeout);
    timeout = setTimeout(() => { window.webkit.messageHandlers.domReady.postMessage("ready"); }, 300);
@@ -515,52 +550,64 @@ extension VLWebLoader
   let node = if let selector { Self.documentQuerySelector(selector) } else { "document.body" }
 
   return """
-  (function extractText(node) 
+  (function extractText(node)
   {
-   if (!node) { return ""; } 
+   if (!node) { return ""; }
    const blockTags = new Set([ "p", "div", "section", "article", "header", "footer", "main", "aside", "nav", "ul", "ol", "li", "h1", "h2", "h3", "h4", "h5", "h6", "table", "tr", "td", "th", "blockquote", "pre", "address", "details", "summary", "figure", "figcaption", "dl", "dt", "dd", "fieldset", "legend", "dialog", "hr" ]);
    let text = "";
-   for ( const child of node.childNodes ) 
+   for ( const child of node.childNodes )
    {
-    if ( child.nodeType === Node.TEXT_NODE ) 
+    if ( child.nodeType === Node.TEXT_NODE )
     {
      const t = child.textContent.replace(/\\n/g, " ").trim();
      if ( t.length > 0 ) { text += t + " "; }
     }
-    else if ( child.nodeType === Node.ELEMENT_NODE ) 
+    else if ( child.nodeType === Node.ELEMENT_NODE )
     {
      const tag = child.tagName.toLowerCase();
      if ( tag === "script" || tag === "style" || tag === "noscript" || tag == "img" || tag == "link" || tag == "iframe" ) { continue; }
      if ( tag == "br" || tag == "hr" ) { text = text.trimEnd() + "\\n"; }
-     else 
+     else
      {
       text += extractText(child);
       if ( blockTags.has(tag) ) { text = text.trimEnd() + "\\n"; }
      }
     }
    }
-  
+
    return text;
   })(\(node));
   """
  }
 
  private static let imagesSourcesJS: String = """
- (function() 
+ (function()
  {
   const rawStrings = new Set();
 
-  function parseSrcset(srcset) 
+  // A candidate URL runs up to the next whitespace (it may contain commas); trailing commas end the candidate,
+  // otherwise its descriptor ("320w", "2x") runs up to the next comma
+  function parseSrcset(srcset)
   {
    if ( !srcset ) { return; }
-   srcset.split(",").forEach(entry => 
+   let position = 0;
+   while ( position < srcset.length )
    {
-    const parts = entry.trim().split(/\\s+/);
-    if ( parts.length > 0 && parts[0] ) { rawStrings.add(parts[0]); }
-   });
+    while ( position < srcset.length && /[\\s,]/.test(srcset[position]) ) { position++; }
+    let end = position;
+    while ( end < srcset.length && !/\\s/.test(srcset[end]) ) { end++; }
+    let url = srcset.slice(position, end);
+    position = end;
+    if ( url.endsWith(",") ) { url = url.replace(/,+$/, ""); }
+    else
+    {
+     while ( position < srcset.length && srcset[position] !== "," ) { position++; }
+    }
+    if ( url ) { rawStrings.add(url); }
+   }
   }
 
-  document.querySelectorAll("img").forEach(img => 
+  document.querySelectorAll("img").forEach(img =>
   {
    const src = img.getAttribute("src");
    if ( src ) { rawStrings.add(src); }
